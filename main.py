@@ -1,4 +1,5 @@
 import csv
+import json
 import os
 import re
 import sys
@@ -12,6 +13,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QInputDialog,
     QLabel,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -28,6 +30,8 @@ class ImageLabelingApp(QWidget):
         self.labels = {}
         self.next_label = 1
         self.labeled_images = set()
+        self.image_folder = ""
+        self.coordinate_file = ""
 
     def initUI(self):
         self.setWindowTitle("Image Labeling App")
@@ -57,41 +61,57 @@ class ImageLabelingApp(QWidget):
         self.image_layout.addLayout(right_layout)
         layout.addLayout(self.image_layout)
 
+        button_layout = QHBoxLayout()
+
         self.load_images_button = QPushButton("Load Images Folder", self)
         self.load_images_button.clicked.connect(self.load_images_folder)
-        layout.addWidget(self.load_images_button)
+        button_layout.addWidget(self.load_images_button)
 
         self.load_coordinates_button = QPushButton("Load Coordinates", self)
         self.load_coordinates_button.clicked.connect(self.load_coordinates)
-        layout.addWidget(self.load_coordinates_button)
+        button_layout.addWidget(self.load_coordinates_button)
 
         self.next_button = QPushButton("Next Images", self)
         self.next_button.clicked.connect(self.next_images)
-        layout.addWidget(self.next_button)
+        button_layout.addWidget(self.next_button)
 
         self.save_button = QPushButton("Save Labels", self)
         self.save_button.clicked.connect(self.save_labels)
-        layout.addWidget(self.save_button)
+        button_layout.addWidget(self.save_button)
+
+        self.save_state_button = QPushButton("Save State", self)
+        self.save_state_button.clicked.connect(self.save_state)
+        button_layout.addWidget(self.save_state_button)
+
+        self.load_state_button = QPushButton("Load State", self)
+        self.load_state_button.clicked.connect(self.load_state)
+        button_layout.addWidget(self.load_state_button)
+
+        layout.addLayout(button_layout)
 
         self.setLayout(layout)
 
     def load_images_folder(self):
         folder_path = QFileDialog.getExistingDirectory(self, "Select Images Folder")
         if folder_path:
-            image_files = [
-                f
-                for f in os.listdir(folder_path)
-                if f.lower().endswith((".png", ".jpg", ".jpeg", ".bmp"))
-            ]
+            self.load_images_from_folder(folder_path)
 
-            # Sort image files based on the number in their filename
-            image_files.sort(key=lambda x: int(re.search(r"\d+", x).group()))
+    def load_images_from_folder(self, folder_path):
+        self.image_folder = folder_path
+        image_files = [
+            f
+            for f in os.listdir(folder_path)
+            if f.lower().endswith((".png", ".jpg", ".jpeg", ".bmp"))
+        ]
 
-            self.images = [os.path.join(folder_path, f) for f in image_files]
-            self.current_image_index = 0
-            self.update_image_combo()
-            self.update_images()
-            print(f"Loaded {len(self.images)} images from folder.")
+        # Sort image files based on the number in their filename
+        image_files.sort(key=lambda x: int(re.search(r"\d+", x).group()))
+
+        self.images = [os.path.join(folder_path, f) for f in image_files]
+        self.current_image_index = 0
+        self.update_image_combo()
+        self.update_images()
+        print(f"Loaded {len(self.images)} images from folder.")
 
     def load_coordinates(self):
         file_dialog = QFileDialog()
@@ -99,16 +119,20 @@ class ImageLabelingApp(QWidget):
             self, "Select Coordinate CSV", "", "CSV Files (*.csv)"
         )
         if csv_file:
-            self.coordinates = []
-            with open(csv_file, "r") as f:
-                csv_reader = csv.reader(f)
-                next(csv_reader)  # Skip header
-                for row in csv_reader:
-                    frame, x, y = int(row[0]), float(row[1]), float(row[2])
-                    self.coordinates.append((frame, x, y))
-            print(f"Loaded {len(self.coordinates)} coordinate points.")
-            self.auto_label_first_image()
-            self.update_images()
+            self.load_coordinates_from_file(csv_file)
+
+    def load_coordinates_from_file(self, csv_file):
+        self.coordinate_file = csv_file
+        self.coordinates = []
+        with open(csv_file, "r") as f:
+            csv_reader = csv.reader(f)
+            next(csv_reader)  # Skip header
+            for row in csv_reader:
+                frame, x, y = int(row[0]), float(row[1]), float(row[2])
+                self.coordinates.append((frame, x, y))
+        print(f"Loaded {len(self.coordinates)} coordinate points.")
+        self.auto_label_first_image()
+        self.update_images()
 
     def auto_label_first_image(self):
         first_frame_coords = [
@@ -239,6 +263,45 @@ class ImageLabelingApp(QWidget):
                     label = self.labels.get(i, "")
                     csv_writer.writerow([coord[0], coord[1], coord[2], label])
             print(f"Saved labeled coordinates to {output_file}")
+
+    def save_state(self):
+        file_dialog = QFileDialog()
+        state_file, _ = file_dialog.getSaveFileName(
+            self, "Save Current State", "", "JSON Files (*.json)"
+        )
+        if state_file:
+            state = {
+                "image_folder": self.image_folder,
+                "coordinate_file": self.coordinate_file,
+                "current_image_index": self.current_image_index,
+                "labels": self.labels,
+                "next_label": self.next_label,
+                "labeled_images": list(self.labeled_images),
+            }
+            with open(state_file, "w") as f:
+                json.dump(state, f)
+            print(f"Saved current state to {state_file}")
+
+    def load_state(self):
+        file_dialog = QFileDialog()
+        state_file, _ = file_dialog.getOpenFileName(
+            self, "Load Saved State", "", "JSON Files (*.json)"
+        )
+        if state_file:
+            with open(state_file, "r") as f:
+                state = json.load(f)
+
+            self.image_folder = state["image_folder"]
+            self.coordinate_file = state["coordinate_file"]
+            self.current_image_index = state["current_image_index"]
+            self.labels = {int(k): v for k, v in state["labels"].items()}
+            self.next_label = state["next_label"]
+            self.labeled_images = set(state["labeled_images"])
+
+            self.load_images_from_folder(self.image_folder)
+            self.load_coordinates_from_file(self.coordinate_file)
+            self.update_images()
+            print(f"Loaded state from {state_file}")
 
 
 if __name__ == "__main__":
