@@ -71,6 +71,10 @@ class ImageLabelingApp(QWidget):
         self.load_coordinates_button.clicked.connect(self.load_coordinates)
         button_layout.addWidget(self.load_coordinates_button)
 
+        self.prev_button = QPushButton("Previous Images", self)
+        self.prev_button.clicked.connect(self.prev_images)
+        button_layout.addWidget(self.prev_button)
+
         self.next_button = QPushButton("Next Images", self)
         self.next_button.clicked.connect(self.next_images)
         button_layout.addWidget(self.next_button)
@@ -164,7 +168,7 @@ class ImageLabelingApp(QWidget):
             self.draw_points(self.image1, image_index)
 
     def update_images(self):
-        if self.current_image_index < len(self.images):
+        if 0 <= self.current_image_index < len(self.images):
             self.update_image_combo()
             self.image1.setPixmap(QPixmap(self.images[self.current_image_index]))
             self.draw_points(self.image1, self.current_image_index)
@@ -180,6 +184,9 @@ class ImageLabelingApp(QWidget):
             else:
                 self.image2.clear()
                 self.image2_label.setText("No more images")
+
+        self.prev_button.setEnabled(self.current_image_index > 0)
+        self.next_button.setEnabled(self.current_image_index < len(self.images) - 1)
 
     def draw_points(self, image_label, frame):
         pixmap = image_label.pixmap()
@@ -212,8 +219,11 @@ class ImageLabelingApp(QWidget):
         if self.current_image_index < len(self.images) - 1:
             self.current_image_index += 1
             self.update_images()
-        else:
-            print("No more images to display.")
+
+    def prev_images(self):
+        if self.current_image_index > 0:
+            self.current_image_index -= 1
+            self.update_images()
 
     def mousePressEvent(self, event):
         for i, image_label in enumerate([self.image1, self.image2]):
