@@ -169,7 +169,6 @@ class ImageLabelingApp(QWidget):
 
     def update_images(self):
         if 0 <= self.current_image_index < len(self.images):
-            self.update_image_combo()
             self.image1.setPixmap(QPixmap(self.images[self.current_image_index]))
             self.draw_points(self.image1, self.current_image_index)
 
@@ -187,6 +186,14 @@ class ImageLabelingApp(QWidget):
 
         self.prev_button.setEnabled(self.current_image_index > 0)
         self.next_button.setEnabled(self.current_image_index < len(self.images) - 1)
+
+        # Update combo box selection if the current image is labeled
+        if self.current_image_index in self.labeled_images:
+            combo_index = self.image1_combo.findText(
+                f"Image {self.current_image_index + 1}"
+            )
+            if combo_index != -1:
+                self.image1_combo.setCurrentIndex(combo_index)
 
     def draw_points(self, image_label, frame):
         pixmap = image_label.pixmap()
@@ -257,6 +264,7 @@ class ImageLabelingApp(QWidget):
                             self.labels[i] = int(label)
 
                 self.labeled_images.add(frame)
+                self.update_image_combo()
                 self.update_images()
                 break
 
