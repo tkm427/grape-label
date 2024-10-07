@@ -71,6 +71,10 @@ class ImageLabelingApp(QWidget):
         self.load_coordinates_button.clicked.connect(self.load_coordinates)
         button_layout.addWidget(self.load_coordinates_button)
 
+        self.prev_button = QPushButton("Previous Images", self)
+        self.prev_button.clicked.connect(self.prev_images)
+        button_layout.addWidget(self.prev_button)
+
         self.next_button = QPushButton("Next Images", self)
         self.next_button.clicked.connect(self.next_images)
         button_layout.addWidget(self.next_button)
@@ -97,7 +101,9 @@ class ImageLabelingApp(QWidget):
             self.load_images_from_folder(folder_path)
 
     def load_images_from_folder(self, folder_path):
-        self.image_folder = folder_path
+        self.image_folder = os.path.relpath(
+            folder_path, os.path.dirname(os.path.abspath(__file__))
+        )
         image_files = [
             f
             for f in os.listdir(folder_path)
@@ -107,7 +113,7 @@ class ImageLabelingApp(QWidget):
         # Sort image files based on the number in their filename
         image_files.sort(key=lambda x: int(re.search(r"\d+", x).group()))
 
-        self.images = [os.path.join(folder_path, f) for f in image_files]
+        self.images = [os.path.join(self.image_folder, f) for f in image_files]
         self.current_image_index = 0
         self.update_image_combo()
         self.update_images()
@@ -122,7 +128,9 @@ class ImageLabelingApp(QWidget):
             self.load_coordinates_from_file(csv_file)
 
     def load_coordinates_from_file(self, csv_file):
-        self.coordinate_file = csv_file
+        self.coordinate_file = os.path.relpath(
+            csv_file, os.path.dirname(os.path.abspath(__file__))
+        )
         self.coordinates = []
         with open(csv_file, "r") as f:
             csv_reader = csv.reader(f)
@@ -164,8 +172,7 @@ class ImageLabelingApp(QWidget):
             self.draw_points(self.image1, image_index)
 
     def update_images(self):
-        if self.current_image_index < len(self.images):
-            self.update_image_combo()
+        if 0 <= self.current_image_index < len(self.images):
             self.image1.setPixmap(QPixmap(self.images[self.current_image_index]))
             self.draw_points(self.image1, self.current_image_index)
 
@@ -180,6 +187,17 @@ class ImageLabelingApp(QWidget):
             else:
                 self.image2.clear()
                 self.image2_label.setText("No more images")
+
+        self.prev_button.setEnabled(self.current_image_index > 0)
+        self.next_button.setEnabled(self.current_image_index < len(self.images) - 1)
+
+        # Update combo box selection if the current image is labeled
+        if self.current_image_index in self.labeled_images:
+            combo_index = self.image1_combo.findText(
+                f"Image {self.current_image_index + 1}"
+            )
+            if combo_index != -1:
+                self.image1_combo.setCurrentIndex(combo_index)
 
     def draw_points(self, image_label, frame):
         pixmap = image_label.pixmap()
@@ -212,8 +230,11 @@ class ImageLabelingApp(QWidget):
         if self.current_image_index < len(self.images) - 1:
             self.current_image_index += 1
             self.update_images()
-        else:
-            print("No more images to display.")
+
+    def prev_images(self):
+        if self.current_image_index > 0:
+            self.current_image_index -= 1
+            self.update_images()
 
     def mousePressEvent(self, event):
         for i, image_label in enumerate([self.image1, self.image2]):
@@ -247,6 +268,7 @@ class ImageLabelingApp(QWidget):
                             self.labels[i] = int(label)
 
                 self.labeled_images.add(frame)
+                self.update_image_combo()
                 self.update_images()
                 break
 
@@ -298,8 +320,16 @@ class ImageLabelingApp(QWidget):
             self.next_label = state["next_label"]
             self.labeled_images = set(state["labeled_images"])
 
-            self.load_images_from_folder(self.image_folder)
-            self.load_coordinates_from_file(self.coordinate_file)
+            self.load_images_from_folder(
+                os.path.join(
+                    os.path.dirname(os.path.abspath(__file__)), self.image_folder
+                )
+            )
+            self.load_coordinates_from_file(
+                os.path.join(
+                    os.path.dirname(os.path.abspath(__file__)), self.coordinate_file
+                )
+            )
             self.update_images()
             print(f"Loaded state from {state_file}")
 
